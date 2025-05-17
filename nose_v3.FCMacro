@@ -1,0 +1,62 @@
+import FreeCAD as App
+import Part
+
+doc = App.ActiveDocument if App.ActiveDocument else App.newDocument()
+
+# Parameters - all in millimeters
+outer_radius_base = 8
+outer_radius_top = 4
+inner_radius_base = 6
+inner_radius_top = 3
+cone_height = 22
+bridge_length = 10
+bridge_width = 6
+bridge_height = 2
+cone_spacing = 20  # space between cone centers
+clip_angle = 15 #angle that clip makes - higher values mean it angles more towards the cones, pinching the nose more
+
+# Create left outer cone
+left_outer = Part.makeCone(outer_radius_base, outer_radius_top, cone_height)
+left_inner = Part.makeCone(inner_radius_base, inner_radius_top, cone_height)
+left_inner.translate(App.Vector(0, 0, 0))  # make sure inner is aligned
+left_hollow = left_outer.cut(left_inner)
+left_hollow.translate(App.Vector(-cone_spacing / 2, 0, 0))
+left_inner.translate(App.Vector(-cone_spacing / 2, 0, 0))
+
+# Create right outer cone
+right_outer = Part.makeCone(outer_radius_base, outer_radius_top, cone_height)
+right_inner = Part.makeCone(inner_radius_base, inner_radius_top, cone_height)
+right_hollow = right_outer.cut(right_inner)
+right_hollow.translate(App.Vector(cone_spacing / 2, 0, 0))
+right_inner.translate(App.Vector(cone_spacing / 2, 0, 0))
+
+# Create bridge rectangle that connects cones
+bridge = Part.makeBox(bridge_length, bridge_width, bridge_height)
+# Position it between the two cones
+bridge.translate(App.Vector(-bridge_length / 2, -bridge_width / 2, 0))
+
+# Create clip to stay on 
+centerClip = Part.makeBox(7,20,2)
+centerClipAngle = Part.makeBox(centerClip.BoundBox.XMax,2,22)
+centerClipAngle.Placement = App.Placement(App.Vector(0,centerClip.BoundBox.YMax-2,0), App.Rotation(0,0,clip_angle))
+centerClip = centerClip.fuse(centerClipAngle)
+centerClip.Placement = App.Placement(App.Vector(-centerClip.BoundBox.XMax/2,0,0), App.Rotation(0,0,0))
+
+# Combine all parts
+nasal_expander = left_hollow.fuse(right_hollow).fuse(bridge).fuse(centerClip)
+nasal_expander = nasal_expander.cut(right_inner)
+nasal_expander = nasal_expander.cut(left_inner)
+
+#cut center for more airflow
+expanderCut = Part.makeBox(bridge_length+10,bridge_width,15)
+expanderCut.Placement = App.Placement(App.Vector(bridge.BoundBox.XMin-5,-expanderCut.BoundBox.YMax/2,nasal_expander.BoundBox.ZMax-expanderCut.BoundBox.ZMax), App.Rotation(0,0,0))
+nasal_expander = nasal_expander.cut(expanderCut)
+
+# Add to document
+part_obj = doc.addObject("Part::Feature", "NasalExpander")
+part_obj.Shape = nasal_expander
+doc.recompute()
+#Make it pretty#
+App.activeDocument().recompute()
+Gui.activeDocument().activeView().viewAxometric()
+Gui.SendMsgToActiveView("ViewFit")
